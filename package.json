@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vueuse/core": "^13.4.0",
     "gsap": "^3.13.0",
+    "less": "^4.3.0",
     "matter-js": "^0.20.0",
     "phaser": "^3.90.0",
     "pinia": "^3.0.1",
