@@ -24,13 +24,13 @@ const config = {
     hpLevel: 10,             // 每升一级增加的敌人生命值
     hpTime: 10,              // 每30秒增加的敌人生命值
     radius: 15,              // 敌人半径
-    speed: 1,                // 敌人移动速度
+    speed: 2,                // 敌人移动速度
     score: 10                // 击败一个敌人获得的分数
   },
   projectile: {
     speed: 6,                // 子弹速度
     radius: 6,               // 子弹半径
-    baseDamage: 20,          // 子弹基础伤害
+    baseDamage: 10,          // 子弹基础伤害
     maxMultiShot: 7,         // 最大多弹道数量
     minFireRate: 100,        // 最快射速（毫秒）
     fireRateReduce: 60       // 每次升级射速减少的间隔（毫秒）
