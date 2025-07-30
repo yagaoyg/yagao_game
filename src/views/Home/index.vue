@@ -4,6 +4,46 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRafFn } from '@vueuse/core'
 import gsap from 'gsap'
 
+// 游戏配置参数
+const config = {
+  // 画布宽高
+  canvasWidth: 1600, // 游戏画布宽度
+  canvasHeight: 900, // 游戏画布高度
+  player: {
+    radius: 20,        // 玩家半径
+    speed: 5,          // 玩家移动速度
+    health: 100,       // 玩家初始生命值
+    expPerKill: 20     // 击败一个敌人获得的经验
+  },
+  enemy: {
+    baseInterval: 2000,      // 敌人初始刷新间隔（毫秒）
+    minInterval: 300,        // 敌人最小刷新间隔（毫秒）
+    intervalLevelReduce: 100,// 每升一级减少的刷新间隔（毫秒）
+    intervalTimeReduce: 100, // 每30秒减少的刷新间隔（毫秒）
+    baseHp: 20,              // 敌人基础生命值
+    hpLevel: 10,             // 每升一级增加的敌人生命值
+    hpTime: 10,              // 每30秒增加的敌人生命值
+    radius: 15,              // 敌人半径
+    speed: 1,                // 敌人移动速度
+    score: 10                // 击败一个敌人获得的分数
+  },
+  projectile: {
+    speed: 6,                // 子弹速度
+    radius: 6,               // 子弹半径
+    baseDamage: 20,          // 子弹基础伤害
+    maxMultiShot: 7,         // 最大多弹道数量
+    minFireRate: 100,        // 最快射速（毫秒）
+    fireRateReduce: 60       // 每次升级射速减少的间隔（毫秒）
+  },
+  exp: {
+    base: 50,                // 升级所需基础经验
+    perLevel: 30             // 每升一级增加的经验需求
+  },
+  difficulty: {
+    timeStep: 30             // 难度递增的时间步长（秒）
+  }
+}
+
 // 游戏状态
 const gameStarted = ref(false)
 const gameOver = ref(false)
@@ -13,17 +53,17 @@ const level = ref(1)
 // 画布相关
 const canvasRef = ref(null)
 const ctx = ref(null)
-const width = ref(1600)
-const height = ref(900)
+const width = ref(config.canvasWidth)
+const height = ref(config.canvasHeight)
 
 // 玩家相关
 const player = ref({
-  x: 400,
-  y: 300,
-  radius: 20,
-  speed: 3,
+  x: config.canvasWidth / 2,
+  y: config.canvasHeight / 2,
+  radius: config.player.radius,
+  speed: config.player.speed,
   direction: { x: 0, y: 0 },
-  health: 100,
+  health: config.player.health,
   exp: 0
 })
 
@@ -49,10 +89,10 @@ const initGame = () => {
   player.value = {
     x: width.value / 2,
     y: height.value / 2,
-    radius: 20,
-    speed: 5,
+    radius: config.player.radius,
+    speed: config.player.speed,
     direction: { x: 0, y: 0 },
-    health: 100,
+    health: config.player.health,
     exp: 0
   }
   enemies.value = []
@@ -60,26 +100,24 @@ const initGame = () => {
 }
 
 // 敌人刷新间隔和生命值随等级和时间提升
-let baseEnemyInterval = 2000
+let baseEnemyInterval = config.enemy.baseInterval
 let enemySpawnInterval
 let enemySpawnTimer = null
 let gameTime = ref(0)
 
 function getEnemyInterval() {
-  // 难度提升：每升一级减少100ms，最低500ms，随时间每30秒再减少100ms
-  const levelReduce = (level.value - 1) * 100
-  const timeReduce = Math.floor(gameTime.value / 30) * 100
-  return Math.max(500, baseEnemyInterval - levelReduce - timeReduce)
+  const levelReduce = (level.value - 1) * config.enemy.intervalLevelReduce
+  const timeReduce = Math.floor(gameTime.value / config.difficulty.timeStep) * config.enemy.intervalTimeReduce
+  return Math.max(config.enemy.minInterval, config.enemy.baseInterval - levelReduce - timeReduce)
 }
 
 function getEnemyHp() {
-  // 难度提升：基础20+等级*10+每30秒*10
-  return 20 + level.value * 10 + Math.floor(gameTime.value / 30) * 10
+  return config.enemy.baseHp + level.value * config.enemy.hpLevel + Math.floor(gameTime.value / config.difficulty.timeStep) * config.enemy.hpTime
 }
 
 // 生成敌人
 const spawnEnemy = () => {
-  const radius = 15
+  const radius = config.enemy.radius
   let x, y
   if (Math.random() < 0.5) {
     x = Math.random() < 0.5 ? 0 - radius : width.value + radius
@@ -92,7 +130,7 @@ const spawnEnemy = () => {
     x,
     y,
     radius,
-    speed: 1,
+    speed: config.enemy.speed,
     color: 'red',
     alive: true,
     hp: getEnemyHp()
@@ -101,13 +139,9 @@ const spawnEnemy = () => {
 
 // 自动射击武器系统
 let shootInterval
-const projectileSpeed = 6
-const projectileRadius = 6
-const projectileDamage = 20
 const shootProjectile = () => {
   if (!gameStarted.value || gameOver.value || pendingUpgrade.value) return
   if (enemies.value.length === 0) return
-  // 寻找最近的敌人
   let minDist = Infinity
   let target = null
   enemies.value.forEach(enemy => {
@@ -119,17 +153,16 @@ const shootProjectile = () => {
     }
   })
   if (!target) return
-  // 多弹道
   const shots = playerUpgrades.value.multiShot
   const baseAngle = Math.atan2(target.y - player.value.y, target.x - player.value.x)
-  const spread = Math.PI / 12 // 15度
+  const spread = Math.PI / 12
   for (let i = 0; i < shots; i++) {
     const angle = baseAngle + (i - (shots - 1) / 2) * spread
     projectiles.value.push({
       x: player.value.x,
       y: player.value.y,
-      radius: projectileRadius,
-      speed: projectileSpeed,
+      radius: config.projectile.radius,
+      speed: config.projectile.speed,
       dx: Math.cos(angle),
       dy: Math.sin(angle),
       damage: playerUpgrades.value.damage,
@@ -193,15 +226,15 @@ const updateGame = () => {
           enemy.hp -= proj.damage
           if (enemy.hp <= 0) {
             enemy.alive = false
-            score.value += 10
-            gainExp(20)
+            score.value += config.enemy.score
+            gainExp(config.player.expPerKill)
           }
         } else {
           enemy.hp -= proj.damage
           if (enemy.hp <= 0) {
             enemy.alive = false
-            score.value += 10
-            gainExp(20)
+            score.value += config.enemy.score
+            gainExp(config.player.expPerKill)
           }
           projectiles.value.splice(i, 1)
           break
@@ -283,7 +316,7 @@ onMounted(() => {
 })
 
 // 升级相关
-const expToLevel = level => 50 + (level - 1) * 30
+const expToLevel = level => config.exp.base + (level - 1) * config.exp.perLevel
 const upgradeOptions = [
   { key: 'fireRate', label: '射速加快', desc: '子弹发射更快' },
   { key: 'damage', label: '伤害提高', desc: '子弹伤害提升' },
@@ -295,7 +328,7 @@ const upgradeChoices = ref([])
 const pendingUpgrade = ref(false)
 const playerUpgrades = ref({
   fireRate: 400,
-  damage: 20,
+  damage: config.projectile.baseDamage,
   multiShot: 1,
   special: false
 })
@@ -309,7 +342,6 @@ function gainExp(amount) {
     pause()
     showUpgrade.value = true
     pendingUpgrade.value = true
-    // 随机3个升级项
     let pool = [...upgradeOptions]
     upgradeChoices.value = []
     for (let i = 0; i < 3; i++) {
@@ -317,18 +349,17 @@ function gainExp(amount) {
       upgradeChoices.value.push(pool[idx])
       pool.splice(idx, 1)
     }
-    // 升级时重置出怪频率
     resetEnemySpawnTimer()
   }
 }
 
 function chooseUpgrade(opt) {
   if (opt.key === 'fireRate') {
-    playerUpgrades.value.fireRate = Math.max(100, playerUpgrades.value.fireRate - 60)
+    playerUpgrades.value.fireRate = Math.max(config.projectile.minFireRate, playerUpgrades.value.fireRate - config.projectile.fireRateReduce)
   } else if (opt.key === 'damage') {
     playerUpgrades.value.damage += 10
   } else if (opt.key === 'multiShot') {
-    playerUpgrades.value.multiShot = Math.min(7, playerUpgrades.value.multiShot + 1)
+    playerUpgrades.value.multiShot = Math.min(config.projectile.maxMultiShot, playerUpgrades.value.multiShot + 1)
   } else if (opt.key === 'special') {
     playerUpgrades.value.special = true
   }
